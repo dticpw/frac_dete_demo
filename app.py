@@ -8,6 +8,7 @@ from src.candidate_detection import Candidate, candidate_table
 from src.case_index import case_by_label, case_labels, describe_case, list_cases
 from src.dicom_loader import load_case
 from src.external_models import run_enabled_adapters
+from src.interactive_segmentation import run_interactive_point_segmentation
 from src.mesh_preview import build_or_load_mesh
 from src.view_rendering import render_views
 
@@ -55,6 +56,9 @@ def load_selected_case(case_label: str):
         table,
         "",
         None,
+        {},
+        None,
+        "",
     )
 
 
@@ -108,6 +112,53 @@ def add_manual_candidate(state: dict, table_rows, axial_idx: int, coronal_idx: i
     )
     state["candidates"] = _rows_to_candidate_dicts(state, rows)
     return rows, state, f"Added manual marker {candidate_id}."
+
+
+def select_interactive_point(evt: gr.SelectData, state: dict, axial_idx: int):
+    if not state or evt.index is None:
+        return {}, "Load a case first."
+    if isinstance(evt.index, (list, tuple)) and len(evt.index) >= 2:
+        x, y = int(evt.index[0]), int(evt.index[1])
+    else:
+        return {}, "Could not read image click coordinates."
+
+    volume_data = load_case(state["case_id"], state["case_path"])
+    z = int(axial_idx)
+    z = max(0, min(z, volume_data.volume_hu.shape[0] - 1))
+    y = max(0, min(y, volume_data.volume_hu.shape[1] - 1))
+    x = max(0, min(x, volume_data.volume_hu.shape[2] - 1))
+    point = {"z": z, "y": y, "x": x}
+    message = f"Selected nnInteractive point: z={z}, y={y}, x={x}. Click Run Interactive Segmentation."
+    return point, message
+
+
+def run_interactive_segmentation_from_point(state: dict, point_state: dict, device: str):
+    if not state:
+        return None, "Load a case first."
+    if not point_state:
+        return None, "Click one point on the Axial image first."
+
+    volume_data = load_case(state["case_id"], state["case_path"])
+    point = (int(point_state["z"]), int(point_state["y"]), int(point_state["x"]))
+    try:
+        result = run_interactive_point_segmentation(
+            case_id=state["case_id"],
+            volume_hu=volume_data.volume_hu,
+            point_zyx=point,
+            device=device,
+        )
+    except Exception as exc:
+        return None, f"nnInteractive failed: {type(exc).__name__}: {exc}"
+
+    message = (
+        f"nnInteractive finished.\n"
+        f"Point: z={result.point_zyx[0]}, y={result.point_zyx[1]}, x={result.point_zyx[2]}\n"
+        f"Total time: {result.elapsed_seconds}s; inference: {result.inference_seconds}s\n"
+        f"Mask voxels: {result.mask_voxels}\n"
+        f"Mask saved: {result.mask_path}\n"
+        f"Model weight license: {result.license}. This is an interactive segmentation reference, not a fracture diagnosis."
+    )
+    return result.overlay, message
 
 
 def export_annotations(state: dict, table_rows):
@@ -181,6 +232,7 @@ def build_app() -> gr.Blocks:
     with gr.Blocks(title="Fracture Detection Demo") as demo:
         state = gr.State({})
         selected_row = gr.State(None)
+        interactive_point = gr.State({})
         gr.Markdown("# Fracture Detection Demo")
         gr.Markdown("Demo-stage CT DICOM viewer with weak fracture candidate prompts. Candidate scores are heuristic only.")
 
@@ -203,6 +255,18 @@ def build_app() -> gr.Blocks:
             axial_img = gr.Image(label="Axial", type="numpy", height=420)
             coronal_img = gr.Image(label="Coronal", type="numpy", height=420)
             sagittal_img = gr.Image(label="Sagittal", type="numpy", height=420)
+
+        with gr.Accordion("nnInteractive Segmentation Reference", open=True):
+            gr.Markdown(
+                "Click one point on the Axial image, then run point-prompted 3D segmentation. "
+                "This is a segmentation reference, not an automatic fracture diagnosis."
+            )
+            with gr.Row():
+                interactive_device = gr.Radio(["cuda", "cpu"], value="cuda", label="Device", scale=1)
+                interactive_button = gr.Button("Run Interactive Segmentation", variant="primary", scale=2)
+            with gr.Row():
+                interactive_overlay = gr.Image(label="nnInteractive Axial Mask Overlay", type="numpy", height=420)
+                interactive_status = gr.Textbox(label="nnInteractive Status", lines=8)
 
         model_3d = gr.Model3D(
             label="3D Bone Preview",
@@ -238,6 +302,9 @@ def build_app() -> gr.Blocks:
             candidates,
             status,
             selected_row,
+            interactive_point,
+            interactive_overlay,
+            interactive_status,
         ]
         load_button.click(load_selected_case, inputs=[case_dropdown], outputs=load_outputs)
         case_dropdown.change(load_selected_case, inputs=[case_dropdown], outputs=load_outputs)
@@ -246,6 +313,13 @@ def build_app() -> gr.Blocks:
         view_outputs = [axial_img, coronal_img, sagittal_img]
         for component in [axial_slider, coronal_slider, sagittal_slider, window_center, window_width]:
             component.change(update_views, inputs=view_inputs, outputs=view_outputs)
+
+        axial_img.select(select_interactive_point, inputs=[state, axial_slider], outputs=[interactive_point, interactive_status])
+        interactive_button.click(
+            run_interactive_segmentation_from_point,
+            inputs=[state, interactive_point, interactive_device],
+            outputs=[interactive_overlay, interactive_status],
+        )
 
         candidates.select(jump_to_candidate, inputs=[state], outputs=[axial_slider, coronal_slider, sagittal_slider, status, selected_row])
         confirm_button.click(lambda s, t, r: update_candidate_status(s, t, r, "confirmed"), inputs=[state, candidates, selected_row], outputs=[candidates, state, status])

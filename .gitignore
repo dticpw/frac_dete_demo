@@ -18,6 +18,7 @@ outputs/reports/*
 !outputs/reports/.gitkeep
 outputs/totalseg_probe/
 outputs/nninteractive_probe/
+outputs/nninteractive_gradio/
 
 .gradio/
 .pytest_cache/
