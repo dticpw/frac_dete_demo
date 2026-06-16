@@ -4,9 +4,10 @@ import gradio as gr
 
 from src import config
 from src.annotation_store import save_annotations
-from src.candidate_detection import candidate_table, detect_candidates
+from src.candidate_detection import Candidate, candidate_table
 from src.case_index import case_by_label, case_labels, describe_case, list_cases
 from src.dicom_loader import load_case
+from src.external_models import run_enabled_adapters
 from src.mesh_preview import build_or_load_mesh
 from src.view_rendering import render_views
 
@@ -18,7 +19,8 @@ def load_selected_case(case_label: str):
     cases = list_cases()
     case = case_by_label(case_label, cases)
     volume_data = load_case(case.case_id, str(case.path))
-    candidates = detect_candidates(case.case_id, volume_data.volume_hu)
+    external_candidates = run_enabled_adapters(case.case_id, volume_data.volume_hu, metadata=volume_data.metadata)
+    candidates = [_candidate_from_external(item) for item in external_candidates]
     table = candidate_table(candidates)
     mesh_path = build_or_load_mesh(case.case_id, volume_data.volume_hu, candidates)
     shape = volume_data.volume_hu.shape
@@ -116,9 +118,21 @@ def export_annotations(state: dict, table_rows):
     return f"Saved:\n{json_path}\n{csv_path}"
 
 
-def _candidate_from_dict(item: dict):
-    from src.candidate_detection import Candidate
+def _candidate_from_external(item) -> Candidate:
+    return Candidate(
+        candidate_id=item.candidate_id,
+        case_id=item.case_id,
+        slice_index=item.slice_index,
+        x=item.x,
+        y=item.y,
+        z=item.z,
+        score=item.score,
+        reason=f"{item.source}: {item.note}",
+        status=item.status,
+    )
 
+
+def _candidate_from_dict(item: dict):
     return Candidate(
         candidate_id=str(item["candidate_id"]),
         case_id=str(item["case_id"]),
