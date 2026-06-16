@@ -11,11 +11,14 @@ from .candidate_detection import Candidate
 
 
 MESH_DIR = config.CACHE_DIR / "mesh"
+MESH_VERSION = "v2"
+MESH_MAX_DIM = 260
+MESH_MAX_FACES = 400000
 
 
 def build_or_load_mesh(case_id: str, volume_hu: np.ndarray, candidates: list[Candidate]) -> Path:
     MESH_DIR.mkdir(parents=True, exist_ok=True)
-    obj_path = MESH_DIR / f"case_{case_id}_bone_preview.obj"
+    obj_path = MESH_DIR / f"case_{case_id}_bone_preview_{MESH_VERSION}.obj"
     if obj_path.exists() and not _uses_external_material(obj_path):
         return obj_path
 
@@ -30,12 +33,12 @@ def build_or_load_mesh(case_id: str, volume_hu: np.ndarray, candidates: list[Can
         return obj_path
 
     verts, faces, _, _ = measure.marching_cubes(mask.astype(np.uint8), level=0.5)
-    faces = _limit_faces(faces, max_faces=80000)
+    faces = _limit_faces(faces, max_faces=MESH_MAX_FACES)
     _write_obj(obj_path, verts, faces, candidates, factor)
     return obj_path
 
 
-def _downsample_factor(shape: tuple[int, int, int], max_dim: int = 180) -> int:
+def _downsample_factor(shape: tuple[int, int, int], max_dim: int = MESH_MAX_DIM) -> int:
     return max(1, int(np.ceil(max(shape) / max_dim)))
 
 
