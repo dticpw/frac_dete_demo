@@ -7,6 +7,7 @@ from src.annotation_store import save_annotations
 from src.candidate_detection import candidate_table, detect_candidates
 from src.case_index import case_by_label, case_labels, describe_case, list_cases
 from src.dicom_loader import load_case
+from src.mesh_preview import build_or_load_mesh
 from src.view_rendering import render_views
 
 
@@ -19,6 +20,7 @@ def load_selected_case(case_label: str):
     volume_data = load_case(case.case_id, str(case.path))
     candidates = detect_candidates(case.case_id, volume_data.volume_hu)
     table = candidate_table(candidates)
+    mesh_path = build_or_load_mesh(case.case_id, volume_data.volume_hu, candidates)
     shape = volume_data.volume_hu.shape
 
     axial_idx = shape[0] // 2
@@ -47,6 +49,7 @@ def load_selected_case(case_label: str):
         axial,
         coronal,
         sagittal,
+        str(mesh_path),
         table,
         "",
         None,
@@ -187,11 +190,22 @@ def build_app() -> gr.Blocks:
             coronal_img = gr.Image(label="Coronal", type="numpy", height=420)
             sagittal_img = gr.Image(label="Sagittal", type="numpy", height=420)
 
+        model_3d = gr.Model3D(
+            label="3D Bone Preview",
+            display_mode="solid",
+            clear_color=(1.0, 1.0, 1.0, 1.0),
+            height=460,
+        )
+        gr.Markdown(
+            "3D preview is a downsampled bone-surface mesh for spatial orientation only. "
+            "Use the three CT views for detail inspection."
+        )
+
         candidates = gr.Dataframe(headers=TABLE_HEADERS, label="Weak Candidates", interactive=True, wrap=True)
 
         with gr.Row():
-            confirm_button = gr.Button("Confirm First Candidate")
-            reject_button = gr.Button("Reject First Candidate")
+            confirm_button = gr.Button("Confirm Selected Candidate")
+            reject_button = gr.Button("Reject Selected Candidate")
             manual_button = gr.Button("Add Manual Marker At Current Crosshair")
             export_button = gr.Button("Export Annotations")
 
@@ -206,6 +220,7 @@ def build_app() -> gr.Blocks:
             axial_img,
             coronal_img,
             sagittal_img,
+            model_3d,
             candidates,
             status,
             selected_row,

@@ -17,6 +17,7 @@ This is a demo-stage workflow:
 - DICOM case indexing
 - CT volume loading
 - Axial/coronal/sagittal views
+- Downsampled 3D bone-surface preview
 - Bone-window rendering
 - Lightweight heuristic candidate prompts
 - Annotation export
