@@ -27,4 +27,5 @@ The candidate score is only a heuristic sorting value, not a clinical confidence
 ## Docs
 
 - `交互页面说明.md`: explains the page layout, three CT views, candidate IDs such as `1_edge_0492`, score meanings, and annotation workflow.
+- `启发式算法说明.md`: explains the current rule-based weak candidate algorithm and its limitations.
 - `代码文件规划.md`: records the planned code structure and staged implementation route.
