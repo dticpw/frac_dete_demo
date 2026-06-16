@@ -15,6 +15,7 @@ outputs/previews/*
 !outputs/previews/.gitkeep
 outputs/reports/*
 !outputs/reports/.gitkeep
+outputs/totalseg_probe/
 
 .gradio/
 .pytest_cache/
