@@ -10,12 +10,14 @@ data/cache/*
 !data/cache/.gitkeep
 data/annotations/*
 !data/annotations/.gitkeep
+data/models/
 
 outputs/previews/*
 !outputs/previews/.gitkeep
 outputs/reports/*
 !outputs/reports/.gitkeep
 outputs/totalseg_probe/
+outputs/nninteractive_probe/
 
 .gradio/
 .pytest_cache/
