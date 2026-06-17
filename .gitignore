@@ -17,6 +17,7 @@ outputs/previews/*
 outputs/reports/*
 !outputs/reports/.gitkeep
 outputs/totalseg_probe/
+outputs/totalseg_docker/
 outputs/nninteractive_probe/
 outputs/nninteractive_gradio/
 
