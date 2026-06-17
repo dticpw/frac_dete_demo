@@ -3,11 +3,11 @@ from __future__ import annotations
 import numpy as np
 
 from .base import ExternalCandidate, ExternalModelAdapter
+from .cspine_rsna_adapter import RsnaCSpine8thReferenceAdapter
 from .heuristic_adapter import HeuristicAdapter
 from .placeholders import (
     BoneSegmentationReferenceAdapter,
     RibFractureReferenceAdapter,
-    SpineFractureReferenceAdapter,
 )
 
 
@@ -15,7 +15,7 @@ def get_all_adapters() -> list[ExternalModelAdapter]:
     return [
         HeuristicAdapter(),
         RibFractureReferenceAdapter(),
-        SpineFractureReferenceAdapter(),
+        RsnaCSpine8thReferenceAdapter(),
         BoneSegmentationReferenceAdapter(),
     ]
 
