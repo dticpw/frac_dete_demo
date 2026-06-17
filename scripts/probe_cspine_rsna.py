@@ -418,7 +418,7 @@ def inspect_weights(solution_dir: Path, weights_dir: Path) -> dict:
             local_weight_files.extend(
                 str(path)
                 for path in root.rglob("*")
-                if path.is_file() and path.suffix.lower() in {".model", ".pth", ".pt"}
+                if path.is_file() and path.suffix.lower() in {".ckpt", ".model", ".pth", ".pt"}
             )
             local_plan_files.extend(
                 str(path)
