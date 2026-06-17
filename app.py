@@ -8,6 +8,7 @@ from src.candidate_detection import Candidate, candidate_table
 from src.case_index import case_by_label, case_labels, describe_case, list_cases
 from src.dicom_loader import load_case
 from src.external_models import run_enabled_adapters
+from src.external_models.cspine_8th_runtime import check_readiness, format_readiness, run_cspine_reference_case
 from src.interactive_segmentation import run_interactive_point_segmentation
 from src.mesh_preview import build_or_load_mesh
 from src.view_rendering import render_views
@@ -42,6 +43,7 @@ def load_selected_case(case_label: str):
     info = describe_case(case)
     info += f"\nVolume shape: {shape[0]} x {shape[1]} x {shape[2]}"
     info += "\nCandidate score is heuristic only."
+    cspine_status = format_readiness(check_readiness())
 
     return (
         {"case_label": case_label, "case_id": case.case_id, "case_path": str(case.path), "candidates": [cand.to_dict() for cand in candidates]},
@@ -59,6 +61,8 @@ def load_selected_case(case_label: str):
         {},
         None,
         "",
+        cspine_status,
+        [],
     )
 
 
@@ -161,12 +165,37 @@ def run_interactive_segmentation_from_point(state: dict, point_state: dict, devi
     return result.overlay, message
 
 
+def refresh_cspine_reference_status():
+    return format_readiness(check_readiness()), []
+
+
+def run_cspine_reference(state: dict):
+    if not state:
+        return "Load a case first.", []
+    try:
+        result = run_cspine_reference_case(state["case_path"])
+    except Exception as exc:
+        return f"RSNA C-Spine reference is not runnable:\n{type(exc).__name__}: {exc}", []
+    rows = _cspine_result_rows(result)
+    return "RSNA C-Spine reference finished.", rows
+
+
 def export_annotations(state: dict, table_rows):
     if not state:
         return "Load a case first."
     rows = _table_to_rows(table_rows)
     json_path, csv_path = save_annotations(state["case_id"], rows)
     return f"Saved:\n{json_path}\n{csv_path}"
+
+
+def _cspine_result_rows(result: dict) -> list[list]:
+    rows = []
+    study_probability = result.get("study_probability")
+    if study_probability is not None:
+        rows.append(["study", f"{float(study_probability):.4f}", "overall cervical fracture probability"])
+    for label, value in result.get("c1_c7_probabilities", {}).items():
+        rows.append([str(label), f"{float(value):.4f}", "per-vertebra cervical reference"])
+    return rows
 
 
 def _candidate_from_external(item) -> Candidate:
@@ -268,6 +297,22 @@ def build_app() -> gr.Blocks:
                 interactive_overlay = gr.Image(label="nnInteractive Axial Mask Overlay", type="numpy", height=420)
                 interactive_status = gr.Textbox(label="nnInteractive Status", lines=8)
 
+        with gr.Accordion("External C-Spine Reference", open=False):
+            gr.Markdown(
+                "RSNA C-Spine 8th is an out-of-domain cervical fracture reference. "
+                "It is shown separately from wrist/foot weak candidates."
+            )
+            with gr.Row():
+                cspine_refresh_button = gr.Button("Check C-Spine Readiness")
+                cspine_run_button = gr.Button("Run C-Spine Reference", variant="primary")
+            cspine_status = gr.Textbox(label="C-Spine Reference Status", lines=12)
+            cspine_results = gr.Dataframe(
+                headers=["target", "probability", "note"],
+                label="C-Spine Reference Results",
+                interactive=False,
+                wrap=True,
+            )
+
         model_3d = gr.Model3D(
             label="3D Bone Preview",
             display_mode="solid",
@@ -305,6 +350,8 @@ def build_app() -> gr.Blocks:
             interactive_point,
             interactive_overlay,
             interactive_status,
+            cspine_status,
+            cspine_results,
         ]
         load_button.click(load_selected_case, inputs=[case_dropdown], outputs=load_outputs)
         case_dropdown.change(load_selected_case, inputs=[case_dropdown], outputs=load_outputs)
@@ -320,6 +367,8 @@ def build_app() -> gr.Blocks:
             inputs=[state, interactive_point, interactive_device],
             outputs=[interactive_overlay, interactive_status],
         )
+        cspine_refresh_button.click(refresh_cspine_reference_status, outputs=[cspine_status, cspine_results])
+        cspine_run_button.click(run_cspine_reference, inputs=[state], outputs=[cspine_status, cspine_results])
 
         candidates.select(jump_to_candidate, inputs=[state], outputs=[axial_slider, coronal_slider, sagittal_slider, status, selected_row])
         confirm_button.click(lambda s, t, r: update_candidate_status(s, t, r, "confirmed"), inputs=[state, candidates, selected_row], outputs=[candidates, state, status])
