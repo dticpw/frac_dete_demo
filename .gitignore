@@ -18,6 +18,7 @@ outputs/reports/*
 !outputs/reports/.gitkeep
 outputs/totalseg_probe/
 outputs/totalseg_docker/
+outputs/cspine_reference_probe/
 outputs/nninteractive_probe/
 outputs/nninteractive_gradio/
 
