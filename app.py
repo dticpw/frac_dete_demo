@@ -177,7 +177,14 @@ def run_cspine_reference(state: dict):
     except Exception as exc:
         return f"RSNA C-Spine reference is not runnable:\n{type(exc).__name__}: {exc}", []
     rows = _cspine_result_rows(result)
-    return "RSNA C-Spine reference finished.", rows
+    if result.get("fallback_used"):
+        return (
+            "RSNA C-Spine reference finished with fallback values.\n"
+            "This usually means the case is out of the cervical-spine domain or preprocessing failed.\n"
+            f"Reason:\n{result.get('fallback_reason')}",
+            rows,
+        )
+    return f"RSNA C-Spine reference finished in {result.get('elapsed_seconds')}s.", rows
 
 
 def export_annotations(state: dict, table_rows):
@@ -190,11 +197,12 @@ def export_annotations(state: dict, table_rows):
 
 def _cspine_result_rows(result: dict) -> list[list]:
     rows = []
+    note = "fallback mean; not a case-specific prediction" if result.get("fallback_used") else "case-specific cervical reference"
     study_probability = result.get("study_probability")
     if study_probability is not None:
-        rows.append(["study", f"{float(study_probability):.4f}", "overall cervical fracture probability"])
+        rows.append(["study", f"{float(study_probability):.4f}", note])
     for label, value in result.get("c1_c7_probabilities", {}).items():
-        rows.append([str(label), f"{float(value):.4f}", "per-vertebra cervical reference"])
+        rows.append([str(label), f"{float(value):.4f}", note])
     return rows
 
 
